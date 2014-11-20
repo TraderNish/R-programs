@@ -1,0 +1,128 @@
+# required packages: financeR, tseries
+require("financeR")
+require("xts")
+require("fPortfolio")
+We load the dataset djia2012w from the package financeR into a variable data. This data set contains weekly returns of all assets from the Dow Jones Industrial Average index.
+
+# load a prepared scenario set from package financeR
+data(djia2012w)
+Next, we analyze this data set, i.e. check the ticker symbols by using the R base function names() and determine the amount of assets and scenarios by checking the numbers of rows (dimension 1: scenarios) and columns (dimension 2: assets) using the R base function dim.
+
+# analyze scenario data
+names(data)
+##  [1] "AA"   "AXP"  "BA"   "BAC"  "CAT"  "CSCO" "CVX"  "DD"   "DIS"  "GE"
+## [11] "HD"   "HPQ"  "IBM"  "INTC" "JNJ"  "JPM"  "KO"   "MCD"  "MMM"  "MRK"
+## [21] "MSFT" "PFE"  "PG"   "T"    "TRV"  "UNH"  "UTX"  "VZ"   "WMT"  "XOM"
+scenarios <- dim(data)[1]
+assets <- dim(data)[2]
+The package financeR uses different time-series objects than fPortfolio, so we have to convert the xts object into an TimeSeries object.
+
+# convert xts to TimeSeries for fPortfolio
+data_ts <- as.timeSeries(data)
+Now we create the specification for the portfolio optimization: We select an appropriate optimization solver (quadprog) and define that our efficient frontier should contain 20 portfolios.
+
+# fPortfolio specification: solver and efficient fronier
+spec <- portfolioSpec()
+setSolver(spec) <- "solveRquadprog"
+setNFrontierPoints(spec) <- 20
+Then we specify the constraints. Everything we add for our first calculation is that we want long-only portfolios without any other restrictions. We can check the constraints in detail by spec and the constraint set constraints to the function portfolioConstraints().
+
+# fPortfolio constraints
+constraints <- c("LongOnly")
+portfolioConstraints(data_ts, spec, constraints)
+##
+## Title:
+##  Portfolio Constraints
+##
+## Lower/Upper Bounds:
+##       AA AXP BA BAC CAT CSCO CVX DD DIS GE HD HPQ IBM INTC JNJ JPM KO MCD
+## Lower  0   0  0   0   0    0   0  0   0  0  0   0   0    0   0   0  0   0
+## Upper  1   1  1   1   1    1   1  1   1  1  1   1   1    1   1   1  1   1
+##       MMM MRK MSFT PFE PG T TRV UNH UTX VZ WMT XOM
+## Lower   0   0    0   0  0 0   0   0   0  0   0   0
+## Upper   1   1    1   1  1 1   1   1   1  1   1   1
+##
+## Equal Matrix Constraints:
+##        ceq         AA       AXP        BA      BAC        CAT      CSCO
+## Return  NA -0.0005871  0.003952  0.001162  0.01464 -0.0004246  0.002091
+## Budget  -1 -1.0000000 -1.000000 -1.000000 -1.00000 -1.0000000 -1.000000
+##               CVX         DD       DIS        GE        HD      HPQ
+## Return  0.0006983  0.0003821  0.005379  0.003277  0.008058 -0.01106
+## Budget -1.0000000 -1.0000000 -1.000000 -1.000000 -1.000000 -1.00000
+##              IBM      INTC       JNJ       JPM        KO       MCD
+## Return  0.001453 -0.003033  0.002265  0.005701  0.001711 -0.001564
+## Budget -1.000000 -1.000000 -1.000000 -1.000000 -1.000000 -1.000000
+##              MMM       MRK       MSFT       PFE        PG         T
+## Return  0.002819  0.002437  0.0004338  0.003865  0.001255  0.003432
+## Budget -1.000000 -1.000000 -1.0000000 -1.000000 -1.000000 -1.000000
+##              TRV       UNH       UTX       VZ       WMT        XOM
+## Return  0.004823  0.001438  0.002803  0.00329  0.003548  0.0009214
+## Budget -1.000000 -1.000000 -1.000000 -1.00000 -1.000000 -1.0000000
+Now we are ready to start the optmization and pass data, specification and constraints to the function portfolioFrontier(). We can examine the result using a standard print() command.
+
+# perform optimization
+frontier <- portfolioFrontier(data_ts, spec, constraints)
+print(frontier)
+##
+## Title:
+##  MV Portfolio Frontier
+##  Estimator:         covEstimator
+##  Solver:            solveRquadprog
+##  Optimize:          minRisk
+##  Constraints:       LongOnly
+##  Portfolio Points:  5 of 19
+##
+## Portfolio Weights:
+##        AA    AXP     BA    BAC    CAT   CSCO    CVX     DD    DIS     GE
+## 1  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 5  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 10 0.0000 0.0000 0.0153 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 14 0.0000 0.0000 0.0000 0.1771 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 19 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##        HD    HPQ    IBM   INTC    JNJ    JPM     KO    MCD    MMM    MRK
+## 1  0.0000 0.8575 0.0000 0.0000 0.0000 0.0000 0.0000 0.1425 0.0000 0.0000
+## 5  0.0000 0.2741 0.0000 0.1643 0.0000 0.0000 0.0000 0.5219 0.0000 0.0000
+## 10 0.0556 0.0000 0.0652 0.0000 0.2997 0.0000 0.0124 0.0527 0.0000 0.0000
+## 14 0.5066 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 19 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##      MSFT    PFE     PG      T    TRV    UNH    UTX     VZ    WMT    XOM
+## 1  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 5  0.0000 0.0000 0.0397 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 10 0.0000 0.0461 0.1437 0.0743 0.0000 0.0750 0.0000 0.0000 0.1601 0.0000
+## 14 0.0000 0.2548 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0615 0.0000
+## 19 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##
+## Covariance Risk Budgets:
+##        AA    AXP     BA    BAC    CAT   CSCO    CVX     DD    DIS     GE
+## 1  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 5  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 10 0.0000 0.0000 0.0150 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 14 0.0000 0.0000 0.0000 0.3757 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 19 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##        HD    HPQ    IBM   INTC    JNJ    JPM     KO    MCD    MMM    MRK
+## 1  0.0000 0.9825 0.0000 0.0000 0.0000 0.0000 0.0000 0.0175 0.0000 0.0000
+## 5  0.0000 0.5315 0.0000 0.1355 0.0000 0.0000 0.0000 0.3239 0.0000 0.0000
+## 10 0.0594 0.0000 0.0644 0.0000 0.2990 0.0000 0.0123 0.0501 0.0000 0.0000
+## 14 0.5217 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 19 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##      MSFT    PFE     PG      T    TRV    UNH    UTX     VZ    WMT    XOM
+## 1  0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 5  0.0000 0.0000 0.0091 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+## 10 0.0000 0.0469 0.1415 0.0751 0.0000 0.0740 0.0000 0.0000 0.1623 0.0000
+## 14 0.0000 0.0853 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0173 0.0000
+## 19 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
+##
+## Target Return and Risks:
+##       mean      mu     Cov   Sigma    CVaR     VaR
+## 1  -0.0097 -0.0097  0.0439  0.0439  0.1131  0.0911
+## 5  -0.0043 -0.0043  0.0219  0.0219  0.0501  0.0440
+## 10  0.0025  0.0025  0.0114  0.0114  0.0215  0.0175
+## 14  0.0079  0.0079  0.0206  0.0206  0.0329  0.0239
+## 19  0.0146  0.0146  0.0559  0.0559  0.0862  0.0698
+##
+## Description:
+##  Tue Aug 13 16:50:02 2013 by user:
+fPortfolio generally produces really nice graphs. To plot a colorful efficient frontier, we just need to pass our frontier to the function tailoredFrontierPlot().
+
+# plot efficient frontier
+tailoredFrontierPlot(object = frontier)
