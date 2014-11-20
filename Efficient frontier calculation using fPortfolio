@@ -126,3 +126,6 @@ fPortfolio generally produces really nice graphs. To plot a colorful efficient f
 
 # plot efficient frontier
 tailoredFrontierPlot(object = frontier)
+
+# plot weights
+weightsPlot(frontier, col = rainbow(assets))
