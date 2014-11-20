@@ -1,0 +1,57 @@
+# load package quantmod
+require("quantmod")
+First, we obtain daily stock data from Yahoo! Finance using the package quantmod.
+
+# retrive stock price of MSFT in 2012
+ticker <- "MSFT"
+data <- getSymbols(ticker, from = as.Date("2012-01-01"), to = as.Date("2012-12-31"),
+auto.assign = FALSE)
+Then we calculate returns of the adjusted close prices using the function ROC() from the package TTR.
+
+# calculate daily returns and generate a clean numeric vector
+ret <- as.vector(na.omit(ROC(Ad(data))))
+Now we barplot the daily returns.
+
+# plot daily returns
+barplot(ret, main = paste("Daily returns", ticker))
+
+Then we calculate the correlation between rt and rt − 1.
+
+# correlation of r(t) and r(t-1)
+ret0 <- ret[-length(ret)]  # r(t-1)
+ret1 <- ret[-1]  # r(t)
+print(cor(ret0, ret1))
+## [1] -0.001292
+Our main task is to calculate a linear model and to check whether there is any significance.
+
+# calculate a linear model (linear regression)
+res <- lm(ret1 ~ ret0)
+summary(res)
+##
+## Call:
+## lm(formula = ret1 ~ ret0)
+##
+## Residuals:
+##      Min       1Q   Median       3Q      Max
+## -0.03272 -0.00768 -0.00100  0.00721  0.05527
+##
+## Coefficients:
+##              Estimate Std. Error t value Pr(>|t|)
+## (Intercept)  9.38e-06   8.19e-04    0.01     0.99
+## ret0        -1.28e-03   6.34e-02   -0.02     0.98
+##
+## Residual standard error: 0.0129 on 246 degrees of freedom
+## Multiple R-squared:  1.67e-06,   Adjusted R-squared:  -0.00406
+## F-statistic: 0.00041 on 1 and 246 DF,  p-value: 0.984
+beta0 <- res$coefficients[[1]]
+beta1 <- res$coefficients[[2]]
+In addition, we plot the regression.
+
+# plot results
+plot(ret0, ret1, xlab = "r(t-1)", ylab = "r(t)", main = ticker)
+abline(beta0, beta1)
+
+Finally, we draw the auto-correlation diagram of the returns.
+
+# correlogram (auto-correlation) of returns
+plot(acf(ret, plot = FALSE), main = paste("Auto-Correlation", ticker))
