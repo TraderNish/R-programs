@@ -1,0 +1,51 @@
+The main package we apply in this snippet is tseries. However, we also need some data, such that we will use the package financeR to obtain a portfolio return scenario set in xts format.
+
+# required packages: financeR, xts, tseries
+require("financeR")
+## Warning: there is no package called 'financeR'
+require("xts")
+require("tseries")
+We now load the dataset djia2012w from the package financeR into a variable data. This data set contains weekly returns of all assets from the Dow Jones Industrial Average index.
+
+# load a prepared scenario set from package financeR
+data(djia2012w)
+## Warning: data set 'djia2012w' not found
+Next, we analyze this data set, i.e. check the ticker symbols by using the R base function names() and determine the amount of assets and scenarios by checking the numbers of rows (dimension 1: scenarios) and columns (dimension 2: assets) using the R base function dim.
+
+# analyze scenario data
+names(data)
+##  [1] "AA"   "AXP"  "BA"   "BAC"  "CAT"  "CSCO" "CVX"  "DD"   "DIS"  "GE"
+## [11] "HD"   "HPQ"  "IBM"  "INTC" "JNJ"  "JPM"  "KO"   "MCD"  "MMM"  "MRK"
+## [21] "MSFT" "PFE"  "PG"   "T"    "TRV"  "UNH"  "UTX"  "VZ"   "WMT"  "XOM"
+scenarios <- dim(data)[1]
+assets <- dim(data)[2]
+The good thing about the package tseries is that it provides a function portfolio.optim, which computes the optimal long-only Markowitz portfolio just by passing the scenario data set. The function returns a list - the list component pw contains the portfolio weights.
+
+# apply the basic Markowitz portfolio optimizer from tseries
+result <- portfolio.optim(data)
+portfolio <- result$pw
+# check the portfolio
+print(portfolio)
+##  [1] -2.249e-17  8.432e-18  2.647e-02  9.643e-18  1.092e-17 -1.018e-17
+##  [7]  2.003e-16  6.480e-17 -7.777e-17 -3.995e-17  2.904e-02  1.917e-20
+## [13]  6.584e-02 -3.491e-18  3.036e-01 -5.427e-17  2.493e-02  6.762e-02
+## [19]  1.219e-18  1.910e-17 -6.805e-18  2.006e-02  1.542e-01  6.999e-02
+## [25]  1.989e-19  7.998e-02  4.524e-18 -4.126e-18  1.583e-01  1.178e-16
+Due to numerical instabilities of the applied optimization solver, we can see that the values which should be zero are actually small but not 0 and although we computed a long-only portfolio, we end up in (again very small) negative values, which can be problematic (e.g. when we try to plot a pie chart), so we clean up the portfolio by simple rounding.
+
+# clean-up portfolio (numerical issues of the optimizer)
+prec <- 6
+portfolio <- round(portfolio, prec)
+# check portfolio again
+print(portfolio)
+##  [1] 0.00000 0.00000 0.02647 0.00000 0.00000 0.00000 0.00000 0.00000
+##  [9] 0.00000 0.00000 0.02904 0.00000 0.06584 0.00000 0.30358 0.00000
+## [17] 0.02493 0.06762 0.00000 0.00000 0.00000 0.02006 0.15420 0.06999
+## [25] 0.00000 0.07998 0.00000 0.00000 0.15829 0.00000
+Finally, we can plot a pie chart of our portfolio.
+
+pie_labels <- names(data)
+pie_labels[which(portfolio == 0)] <- NA
+pie(portfolio, labels = pie_labels, col = rainbow(assets))
+
+
