@@ -1,0 +1,124 @@
+We only need the package quantmod for this snippet.
+
+# load package quantmod
+require("quantmod")
+First we create a list of ticker symbols for our prospective portfolio. In this case we select all the stocks from the Dow Jones Industria Average (DJIA) index. We choose the composition as of the end of December 2012.
+
+# create a list of all ticker symbols from the DJIA (composition as of
+# December 2012)
+DJIA201212 <- c("AA", "AXP", "BA", "BAC", "CAT", "CSCO", "CVX", "DD", "DIS",
+"GE", "HD", "HPQ", "IBM", "INTC", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK",
+"MSFT", "PFE", "PG", "T", "TRV", "UNH", "UTX", "VZ", "WMT", "XOM")
+Now we only need to select a time frame. In this case we select the whole year of 2012 and set the variables
+
+# select ticker symbols and time frame
+stocks <- DJIA201212
+date_begin <- as.Date("2012-01-01")
+date_end <- as.Date("2012-12-31")
+The function getSymbols() from the package quantmod. By default, the data will be downloaded from Yahoo! Finance.
+
+# retrive data of all stocks
+tickers <- getSymbols(stocks, from = date_begin, to = date_end, auto.assign = TRUE)
+The package quantmod provides convenience functions to extract certain parts of the OHLC dataset obtained from our financial data source. In this case we use the function Ad() to extract the adjusted close value of the stocks. We repeat this for all the stocks in our data set and use the powerful xts function merge() to combine all stocks into one (historical) scenario data set.
+
+# combine the adjusted close values in one (xts) data.frame
+dataset <- Ad(get(tickers[1]))
+for (i in 2:length(tickers)) {
+dataset <- merge(dataset, Ad(get(tickers[i])))
+}
+If some dates for some assets are unavailable, merge() will
+
+There are different ways to cope with this, the most common are the following:
+
+na.omit() - leave out all dates, where at least one asset is NA.
+na.locf() - in case of an NA take the last observed value of this asset.
+na.approx() - linear approximation for missing values.
+na.spline() - cubic spline approximation for missing values.
+# handle NA values (four common alternatives)
+data_omit <- na.omit(dataset)  # omit values with NA values
+data_locf <- na.locf(dataset)  # last observation carried forward
+data_approx <- na.approx(dataset)  # linear approximation
+data_spline <- na.spline(dataset)  # cubic spline interpolation
+We use the cubic spline interpolation to calculate weekly returns, i.e. we set the return_lag to 5. This is a rather crude way to calculate weekly returns, a smarter way would be to check the day of the week of each entry. We use the quantmod function ROC() to compute our returns and cancel out the NAs using na.omit() Finally, we change the column names of our newly generated data set to the ticker symbols of our selected stocks.
+
+# calculate returns
+return_lag <- 5  # (crude) weekly returns
+data <- na.omit(ROC(data_spline, return_lag, type = "discrete"))
+names(data) <- stocks
+Finally we check our data set and save it. This dataset is included in the package financeR.
+
+# check returns
+head(data)
+##                 AA      AXP        BA     BAC     CAT     CSCO      CVX
+## 2012-01-10 0.02331 0.009522 0.0105160 0.14410 0.06358 0.010597 -0.01189
+## 2012-01-11 0.01842 0.014802 0.0056007 0.18371 0.05048 0.003829 -0.02192
+## 2012-01-12 0.06127 0.017349 0.0270347 0.07656 0.06724 0.012081 -0.03783
+## 2012-01-13 0.07047 0.030854 0.0082993 0.07003 0.07023 0.011025 -0.02055
+## 2012-01-17 0.03474 0.037732 0.0096355 0.03371 0.06454 0.018072 -0.02532
+## 2012-01-18 0.06074 0.038986 0.0006938 0.02580 0.04770 0.038079 -0.02041
+##                  DD       DIS        GE       HD       HPQ       IBM
+## 2012-01-10 0.013590  0.034455  0.020046 0.033080 0.0027376 -0.026786
+## 2012-01-11 0.005824 -0.003921  0.017564 0.016912 0.0015656 -0.017393
+## 2012-01-12 0.030002 -0.019537  0.020975 0.006949 0.0168892 -0.022222
+## 2012-01-13 0.051247 -0.037904  0.010147 0.007170 0.0035489 -0.018526
+## 2012-01-17 0.045372 -0.031928 -0.006689 0.011703 0.0007874 -0.008744
+## 2012-01-18 0.049162 -0.015373  0.015722 0.030835 0.0117005 -0.001308
+##                 INTC       JNJ      JPM       KO       MCD       MMM
+## 2012-01-10  0.042572 -0.010390  0.03816 -0.01130  0.008699  0.009709
+## 2012-01-11  0.027601 -0.005468  0.04897 -0.02334  0.005380 -0.004938
+## 2012-01-12  0.013428 -0.002576  0.03305 -0.02586  0.007352  0.005704
+## 2012-01-13 -0.004643  0.006660  0.01564 -0.02814 -0.002502  0.002742
+## 2012-01-17 -0.016743  0.002920 -0.01094 -0.02269  0.009050  0.004213
+## 2012-01-18 -0.007500  0.001292  0.01360 -0.02526  0.018721  0.009122
+##                  MRK     MSFT       PFE        PG         T        TRV
+## 2012-01-10  0.005820 0.040172 -0.001455 -0.007596 -0.006122  0.0188779
+## 2012-01-11  0.001661 0.011814  0.005874 -0.016783  0.000000  0.0194863
+## 2012-01-12 -0.003289 0.011694  0.018254 -0.010654  0.005398  0.0078934
+## 2012-01-13 -0.003863 0.005201  0.012846 -0.008288  0.013077  0.0003508
+## 2012-01-17  0.011338 0.018818  0.005371 -0.005713  0.019993  0.0000000
+## 2012-01-18  0.009093 0.013873  0.001457  0.003508  0.019203 -0.0036364
+##                  UNH     UTX        VZ       WMT       XOM
+## 2012-01-10  0.022059 0.01835 -0.016367 -0.021453 -0.003285
+## 2012-01-11  0.014689 0.02199  0.004975 -0.005244 -0.010946
+## 2012-01-12  0.005253 0.03911  0.012524  0.001405 -0.011834
+## 2012-01-13 -0.001357 0.02950  0.015350  0.009022 -0.002827
+## 2012-01-17  0.016107 0.03965  0.017006  0.011287  0.002203
+## 2012-01-18  0.025083 0.02062  0.011370  0.016443  0.008544
+tail(data)
+##                   AA       AXP        BA      BAC       CAT      CSCO
+## 2012-12-21 -0.019653  0.017822  0.029105  0.06723 -0.006757  0.005112
+## 2012-12-24 -0.015012  0.004583  0.017697  0.02277 -0.018422 -0.014134
+## 2012-12-26 -0.020408 -0.011874  0.006593  0.01587 -0.028523 -0.022908
+## 2012-12-27 -0.002339 -0.001778  0.004172  0.02507 -0.028854 -0.030546
+## 2012-12-28 -0.023229 -0.012839 -0.019739 -0.01391 -0.030008 -0.039117
+## 2012-12-31  0.012972 -0.002977 -0.010672  0.02839  0.019486 -0.015259
+##                   CVX        DD       DIS        GE        HD       HPQ
+## 2012-12-21  0.0175257  0.019151  0.027327 -0.025142 -0.012048 -0.027454
+## 2012-12-24 -0.0004674  0.004787  0.012175 -0.041628 -0.027454 -0.014245
+## 2012-12-26 -0.0149474  0.004305 -0.007368 -0.033570 -0.029511 -0.027875
+## 2012-12-27 -0.0126629  0.004763 -0.008210 -0.006345 -0.011287 -0.023927
+## 2012-12-28 -0.0356190 -0.013689 -0.034950 -0.028972 -0.021360 -0.052595
+## 2012-12-31 -0.0142606  0.001132 -0.004200  0.004866  0.008734 -0.006351
+##                  IBM      INTC       JNJ        JPM        KO       MCD
+## 2012-12-21  0.008672  0.011540 -0.006034  0.0276520 -0.020469  0.014632
+## 2012-12-24 -0.006284  0.003005 -0.012885  0.0103286 -0.020287 -0.006893
+## 2012-12-26 -0.019119 -0.014749 -0.011022  0.0018609 -0.023123 -0.019641
+## 2012-12-27 -0.012111 -0.027832 -0.007620  0.0023447 -0.009926 -0.010985
+## 2012-12-28 -0.025353 -0.037727 -0.017944 -0.0288792 -0.029017 -0.027417
+## 2012-12-31 -0.009698 -0.007440 -0.002457 -0.0006959 -0.017322 -0.021857
+##                  MMM      MRK      MSFT       PFE       PG          T
+## 2012-12-21  0.008883 -0.04634  0.024242 -0.004072 -0.01726 -0.0097680
+## 2012-12-24  0.001740 -0.05068 -0.001499 -0.010918 -0.02019 -0.0145543
+## 2012-12-26 -0.008410 -0.06564 -0.025424 -0.015600 -0.02822 -0.0163241
+## 2012-12-27 -0.004025 -0.05624 -0.013011 -0.008091 -0.01977 -0.0073462
+## 2012-12-28 -0.024941 -0.03601 -0.040719 -0.021371 -0.03825 -0.0249089
+## 2012-12-31 -0.002609 -0.01399 -0.026997  0.000000 -0.01206  0.0009248
+##                  TRV        UNH       UTX        VZ       WMT       XOM
+## 2012-12-21 -0.007447  0.0182836  0.032001 -0.014483 -0.001482 -0.009615
+## 2012-12-24 -0.024686  0.0090892  0.028203 -0.013340 -0.008980 -0.021929
+## 2012-12-26 -0.027770 -0.0133945 -0.001476 -0.009416 -0.021691 -0.027800
+## 2012-12-27 -0.021910 -0.0009252 -0.011574  0.002380 -0.004906 -0.017882
+## 2012-12-28 -0.034951 -0.0287273 -0.028342 -0.020745 -0.020224 -0.042700
+## 2012-12-31 -0.013756 -0.0144742 -0.006373 -0.006874 -0.006084 -0.007837
+# save data as RData
+save(data, file = "djia2012w.rda")
