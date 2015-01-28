@@ -1,0 +1,106 @@
+
+# Financial Risk Forecasting Chapter 5 - Implementing risk forecasts
+
+library("tseries")
+require(zoo)
+# time series library
+# the two prices are downloaded separately
+
+p1 = get.hist.quote(instrument = "msft",start = "2000-01-01", end = "2009-12-31",quote = "AdjClose")
+p2 = get.hist.quote(instrument = "ibm", start = "2000-01-01", end = "2009-12-31",quote = "AdjClose")
+
+# convert prices to returns
+
+y1 = coredata(diff(log(p1)))
+y2= coredata(diff(log(p2)))
+
+# length adjustment
+
+y1 = tail(y1, T-14)
+y2= tail(y2,T-14)
+
+T = length(y1)
+
+# portfolio value
+
+value = 1000
+
+# combine returns in one matrix
+
+y = cbind(y1,y2)
+names(y) = c('MSFT', 'IBM')
+
+# probability
+
+p = 0.01
+
+# Univariate Historic Simulation
+
+# sort returns
+ys = sort(y1)
+
+# p % smallest
+
+op = T*p
+
+# VaR number
+
+VaR1 = -ys[op]*value 
+
+
+# Multivariate HS
+# vector of portfolio weights
+
+w = matrix(c(0.3,0.7)) 
+
+# obtain portfolio returns
+
+yp = y %*% w 
+
+yps = sort(yp)
+
+# VaR number
+
+VaR2 = -yps[op]*value 
+
+# Multivariate HS
+# vector of portfolio weights
+
+w = matrix(c(0.3,0.7)) 
+
+# obtain portfolio returns
+
+yp = y %*% w 
+
+yps = sort(yp)
+
+# VaR number
+
+VaR2 = -yps[op]*value 
+
+# Expected shortfall estimation
+
+# Univariate ES in R
+
+ES1 = -mean(ys[1:op]) * value
+
+# VaR when returns are normally distributed
+
+# estimate the volatility
+
+sigma = sd(y1) 
+
+# calculate the VaR
+VaR3 = - sigma * qnorm(p) * value 
+
+# Multivariate normal VaR
+
+# portfolio volatility
+
+a = t(w)
+sigma = a %*% cov(y) %*% w
+sigmaMain = sqrt(sigma)
+VaR4 = - sigmaMain * qnorm(p)*value
+
+
+
