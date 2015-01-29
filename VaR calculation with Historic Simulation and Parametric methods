@@ -182,5 +182,22 @@ sigma = sqrt(t(w) %*% s %*% w)
 VaR8 = -sigma * qnorm(p) * value
 VaR8
 
+# GARCH normal
+
+library(fGarch)
+
+# parameter estimates
+
+g = garchFit(~garch(1,1),y1,cond.dist = "norm",include.mean = FALSE,trace = FALSE) 
+
+omega = g@fit$matcoef[1,1]
+alpha = g@fit$matcoef[2,1]
+beta = g@fit$matcoef[3,1]
+
+# compute sigma2 for t+1
+
+sigma2 = omega + alpha * y[T]^2 + beta * g@h.t[T]
+VaR9 = -sqrt(sigma2) * qnorm(p) * value
+
 
 
