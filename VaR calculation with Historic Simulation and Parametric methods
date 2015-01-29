@@ -1,4 +1,3 @@
-
 # Financial Risk Forecasting Chapter 5 - Implementing risk forecasts
 
 library("tseries")
@@ -101,6 +100,87 @@ a = t(w)
 sigma = a %*% cov(y) %*% w
 sigmaMain = sqrt(sigma)
 VaR4 = - sigmaMain * qnorm(p)*value
+
+# Expected shortfall under normality
+ES2 = sigmaMain * dnorm(qnorm(p))/p * value
+
+# Direct integration ES in R
+VaR = - qnorm(p)
+integrand = function(q){q * dnorm(q)}
+ES = -sigma * integrate(integrand,-Inf,-VaR)$value/p * value
+
+# Student-t VaR in R
+
+library(QRMlib)
+
+# scale the returns
+
+scy1=(y1)*100 
+
+# estimate the distribution parameters
+
+res=fit.st(scy1) 
+
+# rescale the volatility
+sigma=res$par.ests[3]/100 
+
+# extract the degrees of freedom
+nu=res$par.ests[1] 
+
+# calculates the VaR
+VaR5 = -sigma * qt(df=nu,p=p) * value 
+
+# VAR WITH TIME-DEPENDENT VOLATILITY
+
+# Moving Average normal VaR in R
+
+WE=20
+
+for (t in seq(T - 5,T)){
+      t1= t - WE + 1
+      window = y1[t1:t]      # estimation window
+      sigma = sd(window)
+      VaR6 = -sigma * qnorm(p) * value
+      print (VaR6)
+}
+
+VaR6
+
+# Univariate implementation for EWMA
+
+# weight
+
+lambda = 0.94; 
+
+# initial variance
+
+s11 = var(y1[1:30]); 
+s11
+
+for (t in 2:T){
+      s11 = lambda * s11 + (1 - lambda) * y1[t-1]^2
+      print(s11)
+}
+VaR7 = -sqrt(s11) * qnorm(p) * value
+
+VaR7
+
+# Multivariate implementation of EWMA
+
+# initial covariance
+
+s = cov(y)
+
+for (t in 2:T){
+      s = lambda * s + (1-lambda) * y[t - 1,] %*% t(y[t - 1,])
+}
+
+# portfolio vol
+
+sigma = sqrt(t(w) %*% s %*% w)
+
+VaR8 = -sigma * qnorm(p) * value
+VaR8
 
 
 
