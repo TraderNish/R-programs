@@ -1,0 +1,35 @@
+# Financial Risk Forecasting Chapter 6 - Analytical value at risk for options and bonds
+
+library("tseries")
+require(zoo)
+
+bs = function(X, P, r, sigma, T){
+      
+d1 = (log(P/X) + (r + 0.5 * sigma^2)*(T))/(sigma * sqrt(T))
+d2 = d1 - sigma * sqrt(T)
+
+Call = P * pnorm(d1, mean = 0, sd = 1) - X * exp(-r * (T))* pnorm(d2, mean = 0, sd = 1)
+
+Put = X * exp(-r *(T)) * pnorm(-d2, mean = 0, sd = 1) - P * pnorm(-d1,mean = 0, sd = 1)
+
+Delta.Call = pnorm(d1, mean = 0, sd = 1)
+
+Delta.Put = Delta.Call - 1
+
+Gamma = dnorm(d1, mean = 0, sd = 1)/(P * sigma * sqrt(T))
+
+return(list(Call = Call,Put = Put,Delta.Call = Delta.Call,Delta.Put = Delta.Put,Gamma = Gamma))
+
+}
+
+# Black-Scholes in R
+
+
+f = bs(90,100,0.05,0.2,0.5)
+
+f
+
+
+
+
+
