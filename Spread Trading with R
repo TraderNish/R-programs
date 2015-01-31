@@ -1,0 +1,184 @@
+
+# Calculate the spread, beta and risk
+
+require(tseries)
+require(quantmod)
+
+
+# Total least squares regression between SPY and AAPL
+
+SPY = getSymbols('SPY', from = '2011-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+AAPL = getSymbols('AAPL', from = '2011-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+
+# Compute the price difference
+x = SPY[, 6]
+x = x["2011-01-01/2012-12-31"]
+dx = diff(x)
+
+y = AAPL[, 6]
+y = y["2011-01-01/2012-12-31"]
+dy = diff(y)
+
+r = prcomp(~dx+dy)
+slope = r$rotation[2, 1] / r$rotation[1, 1]
+intercept = r$center[2] - slope * r$center[1]
+
+spread = dy - slope * dx
+names(spread) = "spread"
+level = mean(spread, na.rm = TRUE)
+
+run_regression = function(df){
+  return (coef(lm(y~ x-1, data = as.data.frame(df))))
+}
+
+rolling_beta = function(z, width){
+  rollapply(z, width = width, FUN = run_regression, by.column = FALSE, align = "right")
+}
+
+df = cbind(dx[-1, ], dy[-1, ], spread[-1, ])
+a = rolling_beta(df, 10)
+names(a) = "rolling_beta"
+df = cbind(df, a)
+
+threshold = sd(df$spread, na.rm = TRUE)
+
+plot(df$spread)
+
+# New DataFrame
+
+start_date = "2013-01-01"
+end_date = "2014-12-31"
+range = paste(start_date, "::", end_date, sep = "")
+
+x = SPY[range, 6]
+y = AAPL[range, 6]
+
+df = cbind(x, y)
+names(df) = c("x", "y")
+
+beta = rolling_beta(diff(df), 10)
+data = merge(beta, df)
+data$spread = data$y - data$x * lag(beta, 1)
+threshold = mean(data$spread, na.rm = TRUE)
+thresholdSD = threshold + sd(data$spread, na.rm = TRUE)
+
+plot(data$spread, main = 'AAPL - beta * SPY', 
+     cex.main = 0.8, cex.lab = 0.8, cex.axis = 0.8)
+abline(h = thresholdSD, lwd = 2, lty = 2)
+abline(h = -thresholdSD, lwd = 2, lty = 2)
+
+calculate_buy_sell_signals = function(spread, beta, level, lower_threshold, upper_threshold)
+{
+  buy_signals = ifelse(spread <= level - lower_threshold, 1, 0)
+  sell_signals = ifelse(spread >= level + upper_threshold, 1, 0)
+  
+  # Bind these two into matrix
+  
+  output = cbind(spread, buy_signals, sell_signals)
+  colnames(output) = c('spread', 'buy_signals', 'sell_signals')
+  
+  return(output)
+}
+
+buys = ifelse(data$spread > threshold, 1, 0)
+sells = ifelse(data$spread < -threshold, -1, 0)
+data$signals = buys + sells
+
+# Plot for the spread with threshold
+
+plot(data$spread, main = 'AAPL - beta * SPY', 
+     cex.main = 0.8, cex.lab = 0.8, cex.axis = 0.8)
+abline(h = threshold, lwd = 2, lty = 2)
+abline(h = -threshold, lwd = 2, lty = 2)
+
+point_type = rep(NA, nrow(data))
+buy_index = which(data$signal == 1)
+sell_index = which(data$signal == -1)
+
+point_type[buy_index] = 21
+point_type[sell_index] = 24
+points(data$spread, pch = point_type)
+
+# Number of buy and sell signals
+
+num_buy_signals = sum(buys, na.rm = TRUE)
+num_sell_signals = sum(abs(sells), na.rm = TRUE)
+
+# Simplify the strategy of buys and sell - not executing consecutive buys or sells
+data = data[-(1:10), ]
+prev_x_qty = 0
+position = 0
+trade_size = 100
+signal = as.numeric(data$signals)
+signal[is.na(signal)] = 0
+beta = as.numeric(data$beta)
+
+qty_x = rep(0, length(signal))
+qty_y = rep(0, length(signal))
+
+for(i in 1:length(signal)){
+  
+  if (signal[i] == 1 && position == 0){
+    
+    #Buy the spread
+    prev_x_qty = round(beta[i] * trade_size)
+    qty_x[i] = -prev_x_qty
+    qty_y[i] = trade_size
+    position = 1    
+    
+  }
+    
+  
+  if (signal[i] == -1 && position == 0){
+    
+    #Sell the spread
+    prev_x_qty = round(beta[i] * trade_size)
+    qty_x[i] = prev_x_qty
+    qty_y[i] = -trade_size
+    position = -1    
+    
+  }
+  
+  if (signal[i] == 1 && position == -1){
+    
+    # We are short and need to close the existing position 
+    # by buying the spread + buy another spread and initiate the position
+    
+    qty_x[i] = -(round(beta[i] * trade_size) + prev_x_qty)
+    prev_x_qty = round(beta[i] * trade_size)
+    qty_y[i] = 2 * trade_size
+    position = 1    
+    
+  }
+  
+  if (signal[i] == -1 && data$position == 1){
+    
+    # We are long and need to close the existing position 
+    # by selling the spread + sell another spread and initiate the position
+    
+    qty_x[i] = round(beta[i] * trade_size) + prev_x_qty
+    prev_x_qty = round(beta[i] * trade_size)
+    qty_y[i] = - 2 * trade_size
+    position = -1    
+    
+  }
+  
+}
+
+qty_x[length(qty_x)] = -sum(qty_x)
+qty_y[length(qty_y)] = -sum(qty_y)
+
+data$qty_x = qty_x
+data$qty_y = qty_y
+
+
+
+
+
+
+
+
+
+
+
+
