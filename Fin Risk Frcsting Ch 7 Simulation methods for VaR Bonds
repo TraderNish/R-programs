@@ -1,0 +1,96 @@
+
+# Financial Risk Forecasting Ch 7 Simulation methods for VaR Bonds
+
+# Transformation in R
+
+x = seq(3,3,by = 0.1)
+plot(x,pnorm(x),type = "l")
+
+# Various RNs in R
+
+# the seed
+
+set.seed(12)
+S = 100
+a = runif(S)
+b = rnorm(S)
+c = rt(S,4)
+
+par(mfrow = c(2, 2))
+plot(a, type = "l")
+plot(b, type = "l")
+plot(c, type = "l")
+
+# Simulation pricing of a bond in R
+
+# yield curve
+yield = c(5.00,5.69,6.09,6.38,6.61,6.79,6.94,7.07,7.19,7.30)
+
+T = length(yield)
+
+# initial yield rates
+r = 0.07 
+
+# par value
+Par = 10 
+
+# coupon payments
+coupon = r * Par 
+
+# vector of cash flows
+cc = 1:10 * 0 + coupon 
+
+# add par to cash flows
+cc[10] = cc[10] + Par 
+
+# calculate price
+P = sum(cc/((1 + yield/100)^(1:T))) 
+
+# Simulate yields in R
+
+# set seed
+set.seed(12) 
+
+# daily yield volatility
+sigma = 1.5 
+
+# number of simulations
+S=15 
+
+# generate random numbers
+r = rnorm(S,0,sigma) 
+
+# There are 2 ways to get matrix of simulated yields in a loop
+ysim = matrix(nrow = T,ncol = S)
+
+for (i in 1:S) ysim[,i] = yield+r[i]
+
+
+ysim = matrix(matrix(yield,T,S),ncol=S)+ matrix(t(matrix(r,S,T)),
+                                                ncol=S)
+matplot(ysim,type = "l")
+
+# Simulate bond prices in R
+
+SP = vector(length = S)
+
+for (i in 1:S){ # S simulations
+  SP[i] = sum(cc/((1 + ysim[,i]/100)^(T)))
+  print(SP[i])
+}
+SP = SP - (mean(SP) - P) # correct for mean
+
+barplot(SP)
+hist(SP,probability = TRUE)
+x = seq(6,16,length = 100)
+lines(x, dnorm(x, mean = mean(SP), sd = sd(SP)))
+
+
+
+
+
+
+
+
+
+
