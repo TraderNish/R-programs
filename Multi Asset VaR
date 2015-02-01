@@ -1,0 +1,140 @@
+
+
+# Financial Risk Forecasting Ch 7 Simulation methods for VaR Options
+
+# Black–Scholes valuation in R
+
+library("tseries")
+require(zoo)
+
+bs = function(X, P, r, sigma, T){
+  
+  d1 = (log(P/X) + (r + 0.5 * sigma^2)*(T))/(sigma * sqrt(T))
+  d2 = d1 - sigma * sqrt(T)
+  
+  Call = P * pnorm(d1, mean = 0, sd = 1) - X * exp(-r * (T))* pnorm(d2, mean = 0, sd = 1)
+  
+  Put = X * exp(-r *(T)) * pnorm(-d2, mean = 0, sd = 1) - P * pnorm(-d1,mean = 0, sd = 1)
+  
+  Delta.Call = pnorm(d1, mean = 0, sd = 1)
+  
+  Delta.Put = Delta.Call - 1
+  
+  Gamma = dnorm(d1, mean = 0, sd = 1)/(P * sigma * sqrt(T))
+  
+  return(list(Call = Call,Put = Put,Delta.Call = Delta.Call,Delta.Put = Delta.Put,Gamma = Gamma))
+  
+}
+
+
+f = bs(90,100,0.05,0.2,0.5)
+
+# Black–Scholes valuation in R continuation with Monte Carlo
+
+S = 100 # number of simulations
+set.seed(12) # set seed
+F = P0 * exp(r*T) # futures price
+
+# simulated returns with the log normal correction
+ysim = rnorm(S,-0.5 * sigma * sigma * T,sigma * sqrt(T))
+
+F=F* exp(ysim) # futures price
+SP = F-X # payoff
+SP[SP < 0] = 0 # set negative outcomes to zero
+fsim = SP * exp(r*T) # discount
+
+# Option density plots in R
+hist(F,probability = TRUE,ylim = c(0,0.06))
+x = seq(min(F),max(F),length = 100)
+lines(x, dnorm(x, mean = mean(F), sd = sd(SP)))
+
+hist(fsim,nclass = 100,probability = TRUE)
+
+# Simulate VaR in R for one asset 
+
+set.seed(1) # set seed
+
+S = 10000000 # number of simulations
+s2 = 0.01^2 # daily variance
+p = 0.01 # probability
+r = 0.05 # annual risk free
+P = 100 # today’s price
+ysim = rnorm(S,r/365-0.5 * s2,sqrt(s2)) # sim returns
+Psim = P * exp(ysim) # future prices
+q = sort(Psim - P) # simulated P/L
+VaR1 = -q[p*S] # get VaR
+
+# Simulate option VaR in R
+
+T = 0.25; # time to expiration
+X = 100; # strike price
+sigma = sqrt(s2 * 250); # annual volatility
+f = bs(X,P,r,sigma,T) # analytical call price
+fsim = bs(X,Psim,r,sigma,T-(1/365)) # simulate option prices
+q = sort(fsim$Call - f$Call) # simulated P/L
+VaR2 = -q[p * S] # get VaR
+
+
+# Simulated Multi-asset returns in R
+
+library (MASS)
+require(tseries)
+require(quantmod)
+AAPL = getSymbols('AAPL', from = '2014-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+MSFT = getSymbols('MSFT', from = '2014-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+FB = getSymbols('FB', from = '2014-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+AA = getSymbols('AA', from = '2014-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+GILD = getSymbols('GILD', from = '2014-01-01', to = '2014-12-31', adjust = T, auto.assign = FALSE)
+
+AAPL = AAPL[, 6]
+AAPL = diff(log(AAPL))
+
+MSFT = MSFT[, 6]
+MSFT = diff(log(MSFT))
+
+FB = FB[, 6]
+FB = diff(log(FB))
+
+AA = AA[, 6]
+AA = diff(log(AA))
+
+GILD = GILD[, 6]
+GILD = diff(log(GILD))
+
+port = cbind(AAPL, MSFT, FB, AA, GILD)
+colnames(port) = c("AAPL", "MSFT", "FB", "AA", "GILD")
+head(port)
+
+mu = apply(port, 2, mean, na.rm = TRUE) # return mean
+
+# covariance matrix
+port = port[-1, ]
+Sigma = cov(port)
+
+
+set.seed(12) # set seed
+Sim = 1000
+y = mvrnorm(Sim,mu,Sigma) # simulated returns
+
+# Five-asset VaR in R
+
+S2 = 1000
+K=5
+P = c(25, 25, 30, 10, 10) # prices
+x = c(1,1, 1, 1, 1) # number of assets
+Port = P %*% x # portfolio at t
+Psim = matrix(t(matrix(P,K,S2)),ncol=K)* exp(y)
+PortSim = Psim %*% x # simulated portfolio
+q = sort(PortSim-Port[1,1]) # simulated P/L
+VaR4 = -q[S2 * p]
+
+
+
+
+
+
+
+
+
+
+
