@@ -1,0 +1,85 @@
+
+
+# Portfolio Optimization with R
+
+# required packages: financeR, tseries, fPortfolio
+
+require("financeR")
+require("xts")
+require("fPortfolio")
+require(quantmod)
+require(timeSeries)
+
+# symbols = c("AA", "AXP",  "BA",   "BAC",  "CAT",  "CSCO", "CVX",  "DD", "DIS",  "GE", "HD",   "HPQ",  "IBM", "INTC", "JNJ",  "JPM",  "KO",   "MCD",  "MMM",  "MRK", "MSFT", "PFE",  "PG",   "T",    "TRV",  "UNH",  "UTX",  "VZ",   "WMT",  "XOM")
+
+stocks = c("AA", "AXP",  "BA",   "BAC",  "CAT",  "CSCO", "CVX",  "DD", "DIS",  "GE")
+
+start = "2013-01-01"
+end = "2014-12-31"
+nAsset = length(stocks)
+
+z <- get.hist.quote(instrument = stocks[1], start = start,
+                    end = end, quote = "AdjClose",
+                    retclass = "zoo", quiet = T)
+dimnames(z)[[2]] <- as.character(stocks[1])
+
+# download remaining assets in for loop
+
+for (i in 2:nAsset){
+      ## display progress by showing the current iteration step
+      cat("Downloading ", i, " out of ", nAsset , "\n")
+      
+      x = get.hist.quote(instrument = stocks[i], start = start,
+                              end = end, quote = "AdjClose",
+                              retclass = "zoo", quiet = T)
+      
+      dimnames(x)[[2]] = as.character(stocks[i])
+            
+      ## merge with already downloaded data to get assets on same dates 
+            
+      z = merge(z, x)
+            
+}
+
+z = as.timeSeries(z)
+
+data = diff(log(z))
+names(data)
+data = data[-1, ]
+assets = dim(data)[2]
+scenarios = dim(data)[1]
+
+# fPortfolio specification: solver and efficient fronier
+spec = portfolioSpec()
+setSolver(spec) = "solveRquadprog"
+setNFrontierPoints(spec) = 20
+
+# fPortfolio constraints
+constraints <- c("LongOnly")
+portfolioConstraints(data, spec, constraints)
+
+# perform optimization
+frontier = portfolioFrontier(data, spec, constraints)
+print(frontier)
+
+# plot efficient frontier
+tailoredFrontierPlot(object = frontier)
+
+# plot weights
+weightsPlot(frontier, col = rainbow(assets))
+
+
+# We may now repeat the optimization with different constraints. Let's start by still considering long-only portfolios, but restricting the upper investment limit to 50%.
+
+# extended constraints: add upper investment limits
+constraints = c("minW[1:assets] = 0", "maxW[1:assets] = 0.50")
+portfolioConstraints(data, spec, constraints)
+
+frontier = portfolioFrontier(data, spec, constraints)
+print(frontier)
+
+# plot efficient frontier
+tailoredFrontierPlot(object = frontier)
+
+# plot weights
+weightsPlot(frontier, col = rainbow(assets))
