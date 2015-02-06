@@ -1,0 +1,135 @@
+
+
+# Introduction to R for Quantitative methods
+
+library(Quandl)
+library(devtools)
+
+require(quantmod)
+require(timeSeries)
+require(xts)
+require(fPortfolio)
+require(tseries)
+
+stocks = c("AAPL", "GOOG",  "MSFT", "IBM", "T")
+
+start = "2008-01-01"
+end = "2012-12-31"
+nAsset = length(stocks)
+
+AAPL = getSymbols("AAPL", from = start, to = end, auto.assign = FALSE)
+AA = getSymbols("AA", from = start, to = end, auto.assign = FALSE)
+MSFT = getSymbols("MSFT", from = start, to = end, auto.assign = FALSE)
+IBM = getSymbols("IBM", from = start, to = end, auto.assign = FALSE)
+TPrice = getSymbols("T", from = start, to = end, auto.assign = FALSE)
+
+z = merge(AAPL[, 6], AA[, 6], MSFT[, 6], IBM[, 6], TPrice[, 6])
+colnames(z) = c("AAPL", "GOOG",  "MSFT", "IBM", "T")
+
+z = as.timeSeries(z)
+AssetReturn = diff(log(z))
+head(AssetReturn)
+AssetReturn = AssetReturn[-1, ]
+AssetReturn = as.xts(AssetReturn)
+a = coredata(AssetReturn)
+head(a)
+str(a)
+a =round(a, 5)
+
+Q = rbind(cov(a), rep(1, ncol(a)), colMeans(a))
+Q = round(Q, 5)
+
+Q = cbind(Q, rbind(t(tail(Q, 2)), matrix(0, 2, 2)))
+
+mu = 0.01
+b = c(rep(0, ncol(z)), 1, mu)
+
+solve(Q, b)
+####################################################
+
+####################################################
+
+
+# Portfolio Theory with Matrix Algebra = Eric Zivlot
+names(a) = c("AAPL", "AA",  "MSFT", "IBM", "T")
+mu.vec = colMeans(a)
+names(mu.vec) = c("AAPL", "AA",  "MSFT", "IBM", "T")
+mu.vec = mu.vec * 100
+sigma.mat = as.matrix(cov(a))
+
+# Example Portfolios: Equally Weighted
+
+x.vec = rep(1,5)/5
+asset.names <- c("AAPL", "AA",  "MSFT", "IBM", "T")
+names(x.vec) = asset.names
+sum(x.vec)
+
+
+# Compute mean, variance and std deviation
+
+mu.p.x = crossprod(x.vec, mu.vec)
+sig2.p.x = t(x.vec) %*% sigma.mat %*% x.vec
+sig.p.x = sqrt(sig2.p.x)
+
+# long-short portfolio
+y.vec = c(0.25, 0.45, -0.2, 0.3, 0.2)
+names(y.vec) = asset.names
+sum(y.vec)
+
+# Compute mean, variance and std deviation
+
+mu.p.y = crossprod(y.vec, mu.vec)
+sig2.p.y = t(y.vec) %*% sigma.mat %*% y.vec
+sig.p.y = sqrt(sig2.p.y)
+
+mu.p.y
+
+sig.p.y
+
+# covariance and correlation between equally weighted and long-short portfolios
+
+sig.xy = t(x.vec)%*%sigma.mat%*%y.vec
+sig.xy
+
+rho.xy = sig.xy/(sig.p.x*sig.p.y)
+rho.xy
+
+# Risk-Return Characteristics: Random Portfolios
+
+set.seed(123)
+x.aapl = runif(100, min = -1.5, max = 1.5)
+x.aa = runif(100, min = -1.5, max = 1.5)
+x.msft = runif(100, min = -1.5, max = 1.5)
+x.ibm = runif(100, min = -1.5, max = 1.5)
+x.t = 1 - x.aapl - x.aa - x.msft - x.ibm
+
+# Compute Global Minimum Variance Portfolio
+
+# method 1: use full system matrix algebra
+
+top.mat = cbind(2*sigma.mat, rep(1, 5))
+top.mat
+bot.vec = c(rep(1, 5), 0)
+Am.mat = rbind(top.mat, bot.vec)
+b.vec = c(rep(0, 5), 1)
+z.m.mat = solve(Am.mat) %*% b.vec
+m.vec = z.m.mat[1:5, 1]
+
+# Compute mean, variance, and std deviation
+
+sig2.gmin = as.numeric(t(m.vec) %*% sigma.mat %*% m.vec)
+sig.gmin = sqrt(sig2.gmin)
+sig2.gmin
+sig.gmin
+
+
+############################################
+
+# method 2: direct calculation of m using matrix algebra
+
+one.vec = rep(1, 5)
+sigma.inv.mat = solve(sigma.mat)
+top.mat = sigma.inv.mat %*% one.vec
+bot.val = as.numeric((t(one.vec) %*% sigma.inv.mat %*% one.vec))
+m.mat = top.mat/ bot.val
+m.mat[, 1]
