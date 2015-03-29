@@ -1,0 +1,147 @@
+
+#generate the two time series of length 1000
+
+set.seed(20140623)         #fix the random seed
+N <- 1000                  #define length of simulation
+x <- cumsum(rnorm(N))      #simulate a normal random walk
+gamma <- 0.7               #set an initial parameter value
+y <- gamma * x + rnorm(N)  #simulate the cointegrating series
+plot(x, type='l',lwd = 2, col = "green")          #plot the two series
+lines(y,col="red", LWD = 2)
+
+#statistical tests
+install.packages('urca')
+library('urca')
+
+#ADF test for the simulated individual time series
+summary(ur.df(x,type="none"))
+summary(ur.df(y,type="none"))
+
+#take a linear combination of the series
+z = y - gamma*x 
+plot(z,type='l')
+
+summary(ur.df(z,type="none"))
+
+#Estimate the cointegrating relationship
+coin <- lm(y ~ x -1)           #regression without intercept
+coin$resid                     #obtain the residuals
+summary(ur.df(coin$resid))     #ADF test of residuals
+
+
+## VAR(Vector AutoRegressive Model) implementation example
+install.packages('vars');
+library('vars')
+library('quantmod')
+
+getSymbols('MSFT', from='2004-01-02', to='2014-03-31')
+getSymbols('SNP', from='2004-01-02', to='2014-03-31')
+getSymbols('DTB3', src='FRED')
+
+## The daily close-to-close returns 
+chartSeries(ClCl(MSFT))  #a plotting example with shortcuts
+
+DTB3.sub <- DTB3['2004-01-02/2014-03-31']
+
+## Transforming into a stationary series for analysis
+MSFT.ret <- diff(log(Ad(MSFT)))
+SNP.ret  <- diff(log(Ad(SNP)))
+
+## Merge the databases (by omitting all data points for which 
+## we do not have all three data), and omit all NA data. 
+## The former is performed by the inner join parameter 
+
+dataDaily <- na.omit(merge(SNP.ret,MSFT.ret,DTB3.sub), join='inner')
+
+## VAR modeling is usually done on lower frequency data
+
+SNP.M  <- to.monthly(SNP.ret)$SNP.ret.Close
+MSFT.M <- to.monthly(MSFT.ret)$MSFT.ret.Close
+DTB3.M <- to.monthly(DTB3.sub)$DTB3.sub.Close
+
+## maximum of 4 lags in the equations, and choose the model with the 
+## best (lowest) Akaike Information Criterion value:
+var1 <- VAR(dataDaily, lag.max=4, ic="AIC")
+
+summary(var1)
+
+plot(var1)       #Diagram of fit and residuals for each variables
+coef(var1)       #concise summary of the estimated variables
+residuals(var1)  #list of residuals (of the corresponding ~lm)
+fitted(var1)     #list of fitted values
+Phi(var1)        #coefficient matrices of VMA representation
+
+## Predictions using our estimated VAR model can be made by simply calling the predict function 
+## and by adding a desired confidence interval:
+
+var.pred <- predict(var1, n.ahead=10, ci=0.95)
+
+## Impulse responses should be first generated numerically by irf(), 
+## and then they can be plotted by the plot() method.
+
+var.irf <- irf(var1)
+plot(var.irf)
+
+## For the sake of simplicity, we will use the following restrictions:
+
+## S&P index shocks do not have a contemporaneous effect on Microsoft
+## S&P index shocks do not have a contemporaneous effect on interest rates
+## T-Bonds interest rate shocks have no contemporaneous effect on Microsoft
+## These restrictions enter into the SVAR model as 0s in the A matrix, 
+## which is as follows:
+  
+## When setting up the A matrix as a parameter for SVAR estimation in R, 
+## the positions of the to-be estimated parameters should take the NA value. 
+## This can be done with the following assignments:
+
+amat <- diag(3)
+amat[2, 1] <- NA
+amat[2, 3] <- NA
+amat[3, 1] <- NA
+
+
+## Finally, we can fit the SVAR model and plot the impulse response functions 
+
+svar1 <- SVAR(var1, estmethod='direct', Amat = amat)
+irf.svar1 <- irf(svar1)
+plot(irf.svar1)
+
+
+## Cointegrated VAR and VECM - Vector Error Correction Models
+library('quantmod')
+getSymbols('DTB3', src='FRED')
+getSymbols('DTB6', src='FRED')
+DTB3.sub = DTB3['1984-01-02/2014-03-31']
+DTB6.sub = DTB6['1984-01-02/2014-03-31']
+plot(DTB3.sub)
+lines(DTB6.sub, col='red')
+
+## Simple linear regression between both time series
+x1=as.numeric(na.omit(DTB3.sub))
+x2=as.numeric(na.omit(DTB6.sub))
+y = cbind(x1,x2)
+cregr <- lm(x1 ~ x2)
+r = cregr$residuals
+
+## The null hypothesis states that the two series are not cointegrated, 
+## so the low p value indicates rejection of null and presence of cointegration.
+install.packages('tseries')
+library('tseries')
+po.coint <- po.test(y, demean = TRUE, lshort = TRUE)
+
+## The Johansen procedure is applicable for more than 
+## one possible cointegrating relationship; 
+## an implementation can be found in the urca package:
+
+yJoTest = ca.jo(y, type = c("trace"), ecdet = c("none"), K = 2)
+
+## The final step is to obtain the VECM representation of this system, 
+## that is, to run an OLS regression on the lagged differenced variables 
+## and the error correction term derived from the previously calculated cointegrating relationship.
+
+yJoRegr = cajorls(dyTest, r=1)
+yJoRegr
+
+
+
+
