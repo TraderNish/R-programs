@@ -1,0 +1,155 @@
+
+## Chapter 4: Local Polynomial Regression - A nonparametric regression approach
+
+library(locfit)
+
+## first we read in the data
+OldFaithful <- read.csv("OldFaithful.csv")
+OldFaithful[1:3,]
+
+## density histograms and smoothed density histograms
+## time of eruption
+hist(OldFaithful$TimeEruption,freq=FALSE)
+fit1 <- locfit(~lp(TimeEruption),data=OldFaithful)
+plot(fit1)
+
+## waiting time to next eruption
+hist(OldFaithful$TimeWaiting,freq=FALSE)
+fit2 <- locfit(~lp(TimeWaiting),data=OldFaithful)
+plot(fit2)
+
+## experiment with different smoothing constants
+fit2 <- locfit(~lp(TimeWaiting,nn=0.9,deg=2),data=OldFaithful)
+plot(fit2)
+fit2 <- locfit(~lp(TimeWaiting,nn=0.3,deg=2),data=OldFaithful)
+plot(fit2)
+
+## cross-validation of smoothing constant
+## for waiting time to next eruption
+alpha<-seq(0.20,1,by=0.01)
+n1=length(alpha)
+g=matrix(nrow=n1,ncol=4)
+for (k in 1:length(alpha)) {
+      g[k,]<-gcv(~lp(TimeWaiting,nn=alpha[k]),data=OldFaithful)
+}
+g
+plot(g[,4]~g[,3],ylab="GCV",xlab="degrees of freedom")
+## minimum at nn = 0.66
+fit2 <- locfit(~lp(TimeWaiting,nn=0.66,deg=2),data=OldFaithful)
+plot(fit2)
+
+
+## local polynomial regression of TimeEruption on TimeWaiting
+plot(TimeWaiting~TimeEruption,data=OldFaithful)
+# standard regression fit
+fitreg=lm(TimeWaiting~TimeEruption,data=OldFaithful)
+plot(TimeWaiting~TimeEruption,data=OldFaithful)
+abline(fitreg)
+# fit with nearest neighbor bandwidth
+fit3 <- locfit(TimeWaiting~lp(TimeEruption),data=OldFaithful)
+plot(fit3)
+fit3 <- locfit(TimeWaiting~lp(TimeEruption,deg=1),data=OldFaithful)
+plot(fit3) 
+fit3 <- locfit(TimeWaiting~lp(TimeEruption,deg=3),data=OldFaithful)
+plot(fit3)
+
+## Example 2: NOx Exhaust Emissions 
+
+library(locfit)
+## first we read in the data
+ethanol <- read.csv("ethanol.csv")
+ethanol[1:3,] 
+
+## density histogram
+hist(ethanol$NOx,freq=FALSE)
+
+## smoothed density histogram
+fit <- locfit(~lp(NOx),data=ethanol)
+plot(fit) 
+
+## experiment with the parameters of locfit
+fit <- locfit(~lp(NOx,deg=1),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.7,deg=1),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.5,deg=1),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,deg=2),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.7,deg=2),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.5,deg=2),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,deg=3),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.7,deg=3),data=ethanol)
+plot(fit)
+fit <- locfit(~lp(NOx,nn=0.5,deg=3),data=ethanol)
+plot(fit) 
+
+
+## standard regression of NOx on the equivalence ratio
+plot(NOx~EquivRatio,data=ethanol)
+fitreg=lm(NOx~EquivRatio,data=ethanol)
+plot(NOx~EquivRatio,data=ethanol)
+abline(fitreg) 
+
+## local polynomial regression of NOx on the equivalence ratio
+## fit with a 50% nearest neighbor bandwidth.
+fit <- locfit(NOx~lp(EquivRatio,nn=0.5),data=ethanol)
+plot(fit) 
+
+
+## experiment with the parameters of locfit
+fit <- locfit(NOx~lp(EquivRatio,nn=0.2),data=ethanol)
+plot(fit)
+fit <- locfit(NOx~lp(EquivRatio,nn=0.8),data=ethanol)
+plot(fit)
+fit <- locfit(NOx~lp(EquivRatio,deg=1),data=ethanol)
+plot(fit)
+fit <- locfit(NOx~lp(EquivRatio,deg=2),data=ethanol)
+plot(fit) 
+
+## cross-validation
+alpha<-seq(0.20,1,by=0.01)
+n1=length(alpha)
+g=matrix(nrow=n1,ncol=4)
+for (k in 1:length(alpha)) {
+      g[k,]<-gcv(NOx~lp(EquivRatio,nn=alpha[k]),data=ethanol)
+}
+g
+plot(g[,4]~g[,3],ylab="GCV",xlab="degrees of freedom")
+f1=locfit(NOx~lp(EquivRatio,nn=0.30),data=ethanol)
+f1
+plot(f1) 
+
+
+## local polynomial regression on both E and C
+plot(NOx~EquivRatio,data=ethanol)
+plot(NOx~CompRatio,data=ethanol)
+fit <- locfit(NOx~lp(EquivRatio,CompRatio,scale=TRUE),data=ethanol)
+plot(fit) 
+
+
+## experiment with the parameters of locfit
+fit <- locfit(NOx~lp(EquivRatio,CompRatio,nn=0.5,scale=TRUE),data=ethanol)
+plot(fit)
+fit <- locfit(NOx~lp(EquivRatio,CompRatio,deg=2, nn = 0.7,scale=TRUE),data=ethanol)
+plot(fit) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
