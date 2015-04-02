@@ -1,0 +1,73 @@
+## GARCH
+
+## A problem with ARMA models is that they do not handle extreme events or high volatility well. To overcome this a good tool to use is generalized autoregressive conditional heteroskedasticity or the GARCH family of models, which in addition to modeling the mean of the process also model the variance.
+
+require(quantmod)
+att <- getSymbols("T", auto.assign = FALSE)
+
+require(xts)
+head(att)
+plot(att)
+
+
+chartSeries(att)
+addBBands()
+addMACD(32, 50, 12)
+
+## We are only interested in the closing price, so we create a variable holding just that.
+
+attClose <- att$T.Close
+class(attClose)
+
+head(attClose)
+
+## The package most widely considered to be the best for fitting GARCH models is rugarch.
+
+## Generally, a GARCH(1,1) will be sufficient so we will fit that model to the data. The first step is setting up the model specification using ugarchspec. We specify the volatility to be modeled as a GARCH(1, 1) and the mean to be modeled as an ARMA(1, 1). We also specify that the innovation distribution should be the t distribution.
+
+require(forecast)
+a = auto.arima(x = attClose)
+
+require(rugarch)
+attSpec <- ugarchspec(variance.model=list(model="sGARCH",garchOrder=c(1, 1)),mean.model=list(armaOrder=c(2, 2)),distribution.model="std")
+
+## The next step is to fit the model using ugarchfit.
+attGarch <- ugarchfit(spec = attSpec, data = attClose)
+attGarch
+
+## attGarch is an S4 object so its slots are accessed by @
+## the slot fit is a list, so its elements are accessed as usual with $
+plot(attGarch@fit$residuals, type="l")
+plot(attGarch, which=10)
+
+infocriteria(attGarch)
+
+## Predicting with objects from rugarch is done through the ugarchboot function, which can then be plotted as seen
+attPred <- ugarchboot(attGarch, n.ahead=50,method = c("Partial", "Full")[1])
+plot(attPred, which=2)
+
+
+## To judge the quality of this model, we build a few models with different mean specifications—all GARCH(1, 1)—and compare their AICs
+
+# ARMA(1,1)
+attSpec1 <- ugarchspec(variance.model=list(model="sGARCH",garchOrder=c(1, 1)),mean.model=list(armaOrder=c(1, 1)),distribution.model="std")
+
+# ARMA(0,0)
+attSpec2 <- ugarchspec(variance.model=list(model="sGARCH",garchOrder=c(1, 1)),mean.model=list(armaOrder=c(0, 0)),distribution.model="std")
+
+# ARMA(0,2)
+attSpec3 <- ugarchspec(variance.model=list(model="sGARCH",garchOrder=c(1, 1)),mean.model=list(armaOrder=c(0, 2)),distribution.model="std")
+
+# ARMA(1,2)
+attSpec4 <- ugarchspec(variance.model=list(model="sGARCH",garchOrder=c(1, 1)),mean.model=list(armaOrder=c(1, 2)),distribution.model="std")
+
+attGarch1 <- ugarchfit(spec=attSpec1, data=attClose)
+attGarch2 <- ugarchfit(spec=attSpec2, data=attClose)
+attGarch3 <- ugarchfit(spec=attSpec3, data=attClose)
+attGarch4 <- ugarchfit(spec=attSpec4, data=attClose)
+
+infocriteria(attGarch1)
+infocriteria(attGarch2)
+infocriteria(attGarch3)
+infocriteria(attGarch4)
+infocriteria(attGarch)
