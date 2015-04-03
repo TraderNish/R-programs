@@ -1,0 +1,50 @@
+
+## Clustering
+
+wine <- read.table("data_wine.csv", header = TRUE, sep = ",")
+head(wine)
+wineTrain <- wine[, which(names(wine) != "Cultivar")]
+set.seed(278613)
+wineK3 <- kmeans(x = wineTrain, centers = 13)
+wineK3
+
+## Plotting the result of K-means clustering can be difficult because of the high dimensional nature of the data. To overcome this, the plot.kmeans function in useful performs multidimensional scaling to project the data into two dimensions, and then color codes the points according to cluster membership.
+
+require(useful)
+## plot(wineK3, data = wine, class = "Cultivar")
+
+wineBest <- FitKMeans(wineTrain, max.clusters=20, nstart=25,seed=278613)
+
+wineBest
+
+PlotHartigan(wineBest)
+
+## Hierarchical Clustering
+
+wineH = hclust(d = dist(wineTrain))
+plot(wineH)
+
+## There are a number of different ways to compute the distance between clusters and they can have a significant impact on the results of a hierarchical clustering.
+
+wineH1 <- hclust(dist(wineTrain), method = "single")
+wineH2 <- hclust(dist(wineTrain), method = "complete")
+wineH3 <- hclust(dist(wineTrain), method = "average")
+wineH4 <- hclust(dist(wineTrain), method = "centroid")
+
+par(mfrow=c(2,2))
+plot(wineH1, labels = FALSE, main = "Single")
+plot(wineH2, labels = FALSE, main = "Complete")
+plot(wineH3, labels = FALSE, main = "Average")
+plot(wineH4, labels = FALSE, main = "Centroid")
+par(mfrow=c(1,1))
+
+## Cutting the resulting tree produced by hierarchical clustering splits the observations into defined groups. There are two ways to cut it, either specifying the number of clusters, which determines where the cuts take place, or specifying where to make the cut, which determines the number of clusters.
+
+# plot the tree
+plot(wineH)
+
+# split into 3 clusters
+rect.hclust(wineH, k = 3, border = "red")
+
+# split into 13 clusters
+rect.hclust(wineH, k = 13, border = "blue")
