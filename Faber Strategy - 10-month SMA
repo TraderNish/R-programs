@@ -1,6 +1,4 @@
 
-
-
 require(quantstrat)
 require(PerformanceAnalytics)
 require (tseries)
@@ -82,5 +80,10 @@ updatePortf(Portfolio='faber')
 
 View(mktdata['2006-11'])
 
-View(getOrderBook('faber')
-     
+View(get.orderbook('faber', envir = s)
+
+chart.Posn('faber')
+
+perTradeStats('faber')
+tradeStats('faber')
+dailyStats('faber')
