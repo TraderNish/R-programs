@@ -1,0 +1,86 @@
+
+
+
+require(quantstrat)
+require(PerformanceAnalytics)
+require (tseries)
+require(xts)
+require(quantmod)
+require(timeSeries)
+require(TTR)
+
+currency('USD') 
+symbols = c("XLF", "XLP", "XLE", "XLY", "XLV", "XLI", "XLB", "XLK", "XLU")
+
+for(symbol in symbols){
+      stock(symbol, currency="USD",multiplier=1) 
+}
+
+initDate = '2000-01-01'
+from = '2006-01-01'
+to = '2011-01-01'
+
+getSymbols(symbols, from=from, to = to)
+
+for(symbol in symbols){
+      x = get(symbol)
+      x = to.monthly(x, indexAt = 'lastof', drop.time = TRUE)
+      colnames(x) = gsub("x", symbol, colnames(x))
+      assign(symbol, x)
+}
+
+head(XLY)
+
+initPortf('faber', symbols=symbols, initDate= initDate)
+initAcct('faber', portfolios='faber', initDate= initDate)
+initOrders(portfolio='faber', initDate= initDate)
+
+s =  strategy("faber")
+
+####################################################################################
+####################################################################################
+
+s = add.indicator(strategy = s, name = "SMA", arguments = list(x = quote(Cl(mktdata)), n = 10), label = "SMA10" )
+
+####################################################################################
+####################################################################################
+
+s = add.signal(strategy = s, 
+               name = "sigCrossover", 
+               arguments = list(data = quote(mktdata), columns = list("Close", "SMA"), relationship = "gt"), 
+               label = "Cl.gt.SMA")
+
+
+s = add.signal(strategy = s, 
+               name = "sigCrossover", 
+               arguments = list(data = quote(mktdata), columns = list("Close", "SMA"), relationship = "lt"), 
+               label = "Cl.lt.SMA")
+
+
+####################################################################################
+####################################################################################
+
+s = add.rule(strategy = s, 
+             name = "ruleSignal",
+             arguments = list(data = quote(mktdata), sigcol = "Cl.gt.SMA", sigval = TRUE, orderqty = 100, ordertype = 'market', orderside = NULL, threshold = NULL),
+             type = 'enter')
+
+s = add.rule(strategy = s, 
+             name = "ruleSignal",
+             arguments = list(data = quote(mktdata), sigcol = "Cl.lt.SMA", sigval = TRUE, orderqty = 'all', ordertype = 'market', orderside = NULL, threshold = NULL),
+             type = 'exit')
+
+####################################################################################
+####################################################################################
+
+out = try(applyStrategy(strategy = 's', portfolios = 'faber'))
+
+updatePortf(Portfolio='faber')
+
+####################################################################################
+####################################################################################
+
+View(mktdata['2006-11'])
+
+View(getOrderBook('faber')
+     
