@@ -1,0 +1,81 @@
+require(PerformanceAnalytics)
+require(quantstrat)
+require(quantmod)
+
+initDate="2000-01-01"
+from="2010-03-26"
+to="2015-03-25"
+
+options(width=70)
+
+currency('USD')
+Sys.setenv(TZ="UTC")
+
+symbols <- c("SPY", "WFC", "JPM")
+
+getSymbols(symbols, from=from, to=to, src="yahoo", adjust=TRUE) 
+stock(symbols, currency="USD", multiplier=1)
+
+
+#trade sizing and initial equity settings
+tradeSize <- 100000
+initEq <- tradeSize*length(symbols)
+
+strategy.st <- portfolio.st <- account.st <- "MAC"
+rm.strat(strategy.st)
+initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD', initEq=initEq)
+initOrders(portfolio.st, initDate=initDate)
+strategy(strategy.st, store=TRUE)
+
+
+#parameters
+
+nFast = 50
+nSlow = 200
+
+#indicators
+
+add.indicator(strategy.st, name="SMA",
+              arguments=list(x=quote(Cl(mktdata)[,1]), n=50),
+              label="nFast")
+
+add.indicator(strategy.st, name="SMA",
+              arguments=list(x=quote(Cl(mktdata)[,1]), n=200),
+              label="nSlow")
+
+test <- applyIndicators(strategy.st, mktdata=Cl(JPM))
+head(test, 250)
+
+# signals
+
+add.signal(strategy.st, name="sigCrossover",
+           arguments=list(columns=c("nFast", "nSlow"), relationship="gt"),
+           label="long")
+
+add.signal(strategy.st, name="sigCrossover",
+           arguments=list(columns=c("nFast", "nSlow"), relationship="lt"),
+           label="exit")
+# rules
+
+add.rule(strategy.st, name="ruleSignal", 
+         arguments=list(sigcol="long", sigval=TRUE, ordertype="market", 
+                        orderside="long", replace=FALSE, prefer="Close", 
+                        tradeSize=tradeSize, maxSize=tradeSize), 
+         type="enter", path.dep=TRUE)
+
+add.rule(strategy.st, name="ruleSignal", 
+         arguments=list(sigcol="exit", sigval=TRUE, orderqty="all", 
+                        ordertype="market", orderside="long", 
+                        replace=FALSE, prefer="Close"), 
+         type="exit", path.dep=TRUE)
+
+#apply strategy
+t1 <- Sys.time()
+out <- applyStrategy(strategy=strategy.st,portfolios=portfolio.st)
+t2 <- Sys.time()
+print(t2-t1)
+
+colnames(JPM) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+colnames(WFC) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+colnames(SPY) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
