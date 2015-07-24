@@ -1,81 +1,112 @@
+# A simple moving average strategy to evaluate trade efficiency
+# checks on SMA of 50 days and SMA of 100 days
+
+# Load required libraries
 require(PerformanceAnalytics)
 require(quantstrat)
 require(quantmod)
+require(blotter)
+
+# The first line is simply to remove the initial warning that comes from 
+# getting symbols from yahoo. It makes no difference to how the demo runs.
+# The next line clears the blotter environment. The blotter environment contains all # portfolio and account objects.
+options("getSymbols.warning4.0"=FALSE)
+rm(list=ls(.blotter), envir=.blotter)
+
+# Currency must be initialized for every demo.
+
+currency('USD')
+Sys.setenv(TZ="UTC")
+
+suppressWarnings(rm("order_book.MAC",pos=.strategy))
+suppressWarnings(rm("account.MAC","portfolio.MAC",pos=.blotter))
+suppressWarnings(rm("account.st","portfolio.st","symbols","MAC",'start_t','end_t'))
 
 initDate="2000-01-01"
 from="2010-03-26"
 to="2015-03-25"
-
-options(width=70)
-
-currency('USD')
-Sys.setenv(TZ="UTC")
 
 symbols <- c("SPY", "WFC", "JPM")
 
 getSymbols(symbols, from=from, to=to, src="yahoo", adjust=TRUE) 
 stock(symbols, currency="USD", multiplier=1)
 
+initEq= 33333
 
-#trade sizing and initial equity settings
-tradeSize <- 100000
-initEq <- tradeSize*length(symbols)
-
-strategy.st <- portfolio.st <- account.st <- "MAC"
+strategy.st = portfolio.st= account.st='MAC'
 rm.strat(strategy.st)
 initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
-initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD', initEq=initEq)
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD',initEq=initEq)
 initOrders(portfolio.st, initDate=initDate)
 strategy(strategy.st, store=TRUE)
 
+MAC <- add.indicator(strategy = strategy.st, name = "SMA", arguments = list(x=quote(Cl(mktdata)), n=50),label= "ma50" )
+MAC <- add.indicator(strategy = strategy.st, name = "SMA", arguments = list(x=quote(Cl(mktdata)[,1]), n=100),label= "ma100")
 
-#parameters
+MAC <- add.signal(strategy = MAC,name="sigCrossover",arguments = list(columns=c("ma50","ma100"), relationship="gte"),label="ma50.gt.ma100")
+MAC <- add.signal(strategy = MAC,name="sigCrossover",arguments = list(column=c("ma50","ma100"),relationship="lt"),label="ma50.lt.ma100")
 
-nFast = 50
-nSlow = 200
 
-#indicators
+# Unlike indicators and signals, rules usually call one function, which # is called “ruleSignal” (there is a function that is specifically 
+# designed for rebalancing strategies, but it’s possible to do that 
+# outside the bounds of quantstrat). For all intents and purposes, this  # one function handles all rule executions
 
-add.indicator(strategy.st, name="SMA",
-              arguments=list(x=quote(Cl(mktdata)[,1]), n=50),
-              label="nFast")
+MAC <- add.rule(strategy = MAC,name='ruleSignal', arguments = list(sigcol="ma50.gt.ma100",sigval=TRUE, ordertype='market', orderqty=100, orderside='long'),type='enter', path.dep = TRUE)
 
-add.indicator(strategy.st, name="SMA",
-              arguments=list(x=quote(Cl(mktdata)[,1]), n=200),
-              label="nSlow")
+MAC <- add.rule(strategy = MAC,name='ruleSignal', arguments = list(sigcol="ma50.lt.ma100",sigval=TRUE, orderqty='all', ordertype='market', orderside='long'),type='exit', path.dep = TRUE)
 
-test <- applyIndicators(strategy.st, mktdata=Cl(JPM))
-head(test, 250)
+# After adding rules, you can simply call applyStrategy and run your   
+# backtest. Here’s an explanation of how that’s done:
 
-# signals
+# apply strategy
+start_t<-Sys.time()
+out<-applyStrategy(strategy=MAC , portfolios=portfolio.st)
+end_t<-Sys.time()
+print(end_t-start_t)
 
-add.signal(strategy.st, name="sigCrossover",
-           arguments=list(columns=c("nFast", "nSlow"), relationship="gt"),
-           label="long")
+# #set up analytics
 
-add.signal(strategy.st, name="sigCrossover",
-           arguments=list(columns=c("nFast", "nSlow"), relationship="lt"),
-           label="exit")
-# rules
+start_t<-Sys.time()
+updatePortf(Portfolio='MAC',Dates=paste('::',as.Date(Sys.time()),sep=''))
+updateAcct('MAC')
+updateEndEq('MAC')
+end_t<-Sys.time()
+print("trade blotter portfolio update:")
+print(end_t-start_t)
 
-add.rule(strategy.st, name="ruleSignal", 
-         arguments=list(sigcol="long", sigval=TRUE, ordertype="market", 
-                        orderside="long", replace=FALSE, prefer="Close", 
-                        tradeSize=tradeSize, maxSize=tradeSize), 
-         type="enter", path.dep=TRUE)
+chart.Posn(Portfolio='MAC',Symbol=symbols)
+add_SMA(n=50 , on=1,col='blue')
+add_SMA(n=100, on=1)
 
-add.rule(strategy.st, name="ruleSignal", 
-         arguments=list(sigcol="exit", sigval=TRUE, orderqty="all", 
-                        ordertype="market", orderside="long", 
-                        replace=FALSE, prefer="Close"), 
-         type="exit", path.dep=TRUE)
+stats   = tradeStats('MAC')
+View(stats)
+ptstats = perTradeStats('MAC')
+instRets = PortfReturns('MAC')
 
-#apply strategy
-t1 <- Sys.time()
-out <- applyStrategy(strategy=strategy.st,portfolios=portfolio.st)
-t2 <- Sys.time()
-print(t2-t1)
+portfRets = xts(rowMeans(instRets) * ncol(instRets), order.by = index(instRets))
+portfRets = portfRets [!is.na(portfRets)]
+cumPortfRets = cumprod(1 + portfRets)
+firstNonZeroDay = as.character(index(portfRets)[min(which(portfRets != 0))])
 
-colnames(JPM) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
-colnames(WFC) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
-colnames(SPY) = c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+# Comparison with SPY 
+
+getSymbols("SPY", from = firstNonZeroDay, to = to)
+SPYrets = diff(log(Cl(SPY)))[-1]
+cumSPYrets = cumprod(1 + SPYrets)
+comparison = cbind(cumPortfRets, cumSPYrets)
+colnames(comparison) = c("strategy", "SPY")
+chart.TimeSeries(comparison, legend.loc = "topleft", colors = c("green", "red"))
+
+# Calculate risk metrics
+
+SharpeRatio.annualized(portfRets, Rf = 0.000119048)
+# Annualized Sharpe Ratio (Rf=3%) -0.2778226
+
+Return.annualized(R = portfRets)
+# Annualized Return 0.02283386
+ 
+maxDrawdown(portfRets)
+# 0.03023138
+
+
+
