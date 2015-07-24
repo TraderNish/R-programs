@@ -1,0 +1,101 @@
+# Load required libraries
+require(PerformanceAnalytics)
+require(quantstrat)
+require(quantmod)
+require(blotter)
+
+#correct for TZ issues if they crop up
+oldtz<-Sys.getenv('TZ')
+if(oldtz=='') {
+  Sys.setenv(TZ="GMT")
+}
+# Try to clean up in case the demo was run previously
+suppressWarnings(rm("account.faber","portfolio.faber",pos=.blotter))
+suppressWarnings(rm("ltaccount", "ltportfolio", "ClosePrice", "CurrentDate", "equity", 
+                    "GSPC", "stratFaber", "initDate", "initEq", "Posn", "UnitSize", "verbose"))
+suppressWarnings(rm("order_book.faber",pos=.strategy))
+
+# Set initial values
+initDate='2014-01-01'
+initEq=100000
+
+currency("USD")
+symbols = c("SPY", "JPM", "WFC")
+for(symbol in symbols){ # establish tradable instruments
+  stock(symbol, currency="USD",multiplier=1)
+}
+
+getSymbols(symbols, src='yahoo', index.class=c("POSIXt","POSIXct"), from='2014-01-01')
+for(symbol in symbols) {
+  x<-get(symbol)
+  
+  indexFormat(x)<-'%Y-%m-%d'
+  colnames(x)<-gsub("x",symbol,colnames(x))
+  assign(symbol,x)
+}
+
+# Initialize portfolio and account
+initPortf('faber', symbols=symbols, initDate=initDate)
+initAcct('faber', portfolios='faber', initDate=initDate, initEq=100000)
+initOrders(portfolio='faber', initDate=initDate)
+
+# Initialize a strategy object
+strategy("faber", store=TRUE)
+
+# Add an indicator
+add.indicator('faber', name = "SMA", arguments = list(x = quote(Cl(mktdata)), n=10), label="SMA10")
+
+# There are two signals:
+# The first is when monthly price crosses over the 10-month SMA
+add.signal('faber',name="sigCrossover",arguments = list(columns=c("Close","SMA10"),relationship="gte"),label="Cl.gt.SMA")
+# The second is when the monthly price crosses under the 10-month SMA
+add.signal('faber',name="sigCrossover",arguments = list(columns=c("Close","SMA10"),relationship="lt"),label="Cl.lt.SMA")
+
+# There are two rules:
+# The first is to buy when the price crosses above the SMA
+add.rule('faber', name='ruleSignal', arguments = list(sigcol="Cl.gt.SMA", sigval=TRUE, orderqty=500, ordertype='market', orderside='long', pricemethod='market',TxnFees=-5), type='enter', path.dep=TRUE)
+# The second is to sell when the price crosses below the SMA
+add.rule('faber', name='ruleSignal', arguments = list(sigcol="Cl.lt.SMA", sigval=TRUE, orderqty='all', ordertype='market', orderside='long', pricemethod='market',TxnFees=-5), type='exit', path.dep=TRUE)
+
+# Process the indicators and generate trades
+start_t<-Sys.time()
+out<-try(applyStrategy(strategy='faber' , portfolios='faber'))
+end_t<-Sys.time()
+print("Strategy Loop:")
+print(end_t-start_t)
+
+
+start_t<-Sys.time()
+updatePortf(Portfolio='faber',Dates=paste('::',as.Date(Sys.time()),sep=''))
+updateAcct('faber')
+updateEndEq('faber')
+end_t<-Sys.time()
+print("trade blotter portfolio update:")
+print(end_t-start_t)
+
+themelist<-chart_theme()
+themelist$col$up.col<-'lightgreen'
+themelist$col$dn.col<-'pink'
+
+dev.new()
+layout(mat=matrix(1:(length(symbols)+1),ncol=2))
+for(symbol in symbols){
+  chart.Posn(Portfolio='faber',Symbol=symbol,theme=themelist,TA="add_SMA(n=10,col='darkgreen')")
+}
+
+ret1 <- PortfReturns('faber')
+ret1 <- to.monthly(ret1)
+ret1$total <- rowSums(ret1)
+
+View(ret1)
+
+faber.stats<-tradeStats('faber')[,c('Net.Trading.PL','Max.Drawdown','Num.Trades','Profit.Factor','Std.Dev.Trade.PL','Largest.Winner','Largest.Loser','Max.Equity','Min.Equity')]
+View(faber.stats)
+
+Sys.setenv(TZ=oldtz)
+ret1 <- PortfReturns('faber')
+
+##### PLACE THIS BLOCK AT END OF DEMO SCRIPT ################### 
+# book  = getOrderBook(port)
+# stats = tradeStats(port)
+# rets  = PortfReturns(acct)
