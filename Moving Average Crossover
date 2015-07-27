@@ -1,11 +1,11 @@
-# A simple moving average strategy to evaluate trade efficiency
-# checks on SMA of 50 days and SMA of 100 days
+
 
 # Load required libraries
 require(PerformanceAnalytics)
 require(quantstrat)
 require(quantmod)
 require(blotter)
+require(utils)
 
 # The first line is simply to remove the initial warning that comes from 
 # getting symbols from yahoo. It makes no difference to how the demo runs.
@@ -22,16 +22,30 @@ suppressWarnings(rm("order_book.MAC",pos=.strategy))
 suppressWarnings(rm("account.MAC","portfolio.MAC",pos=.blotter))
 suppressWarnings(rm("account.st","portfolio.st","symbols","MAC",'start_t','end_t'))
 
-initDate="2000-01-01"
+initDate="2010-03-25"
 from="2010-03-26"
 to="2015-03-25"
+w = 1.05
 
 symbols <- c("SPY", "WFC", "JPM")
+getSymbols(symbols, from=from, to=to, src="yahoo", adjust=TRUE)
 
-getSymbols(symbols, from=from, to=to, src="yahoo", adjust=TRUE) 
+SPY$Multiple = w * (SMA(SPY$SPY.Close,n=10))
+SPY$Divide = (1/w) * (SMA(SPY$SPY.Close,n=10))
+
+JPM$Multiple = w * (SMA(JPM$JPM.Close,n=10))
+JPM$Divide = (1/w) * (SMA(JPM$JPM.Close,n=10))
+
+WFC$Multiple = w * (SMA(WFC$WFC.Close,n=10))
+WFC$Divide = (1/w) * (SMA(WFC$WFC.Close,n=10))
+
+SPY = SPY[-(1:10),]
+JPM = JPM[-(1:10),]
+WFC = WFC[-(1:10),]
+
 stock(symbols, currency="USD", multiplier=1)
 
-initEq= 33333
+initEq= 100000
 
 strategy.st = portfolio.st= account.st='MAC'
 rm.strat(strategy.st)
@@ -40,31 +54,37 @@ initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD',
 initOrders(portfolio.st, initDate=initDate)
 strategy(strategy.st, store=TRUE)
 
-MAC <- add.indicator(strategy = strategy.st, name = "SMA", arguments = list(x=quote(Cl(mktdata)), n=50),label= "ma50" )
-MAC <- add.indicator(strategy = strategy.st, name = "SMA", arguments = list(x=quote(Cl(mktdata)[,1]), n=100),label= "ma100")
+# Add an indicator
+add.indicator(strategy = strategy.st, name = "RSI", 
+              arguments = list(price = quote(Cl(mktdata)[,1]), n=10), label="RSI10")
 
-MAC <- add.signal(strategy = MAC,name="sigCrossover",arguments = list(columns=c("ma50","ma100"), relationship="gte"),label="ma50.gt.ma100")
-MAC <- add.signal(strategy = MAC,name="sigCrossover",arguments = list(column=c("ma50","ma100"),relationship="lt"),label="ma50.lt.ma100")
+MAC <- add.signal(strategy = strategy.st,name="sigCrossover",
+                  arguments = list(columns=c("Close","Divide"), relationship="lt"),label="Cl.lt.SMA")
+
+MAC <- add.signal(strategy = strategy.st,name="sigCrossover",
+                  arguments = list(column=c("Close","Multiple"),relationship="gt"),label="Cl.gt.SMA")
 
 
-# Unlike indicators and signals, rules usually call one function, which # is called “ruleSignal” (there is a function that is specifically 
-# designed for rebalancing strategies, but it’s possible to do that 
-# outside the bounds of quantstrat). For all intents and purposes, this  # one function handles all rule executions
+MAC <- add.rule(strategy = strategy.st,name='ruleSignal', 
+                arguments = list(sigcol="Cl.lt.SMA",sigval=TRUE, 
+                                 ordertype='market', orderqty=100, 
+                                 orderside='long', TxnFees= -100),
+                type='enter', path.dep = TRUE)
 
-MAC <- add.rule(strategy = MAC,name='ruleSignal', arguments = list(sigcol="ma50.gt.ma100",sigval=TRUE, ordertype='market', orderqty=100, orderside='long'),type='enter', path.dep = TRUE)
-
-MAC <- add.rule(strategy = MAC,name='ruleSignal', arguments = list(sigcol="ma50.lt.ma100",sigval=TRUE, orderqty='all', ordertype='market', orderside='long'),type='exit', path.dep = TRUE)
+MAC <- add.rule(strategy = strategy.st,name='ruleSignal', 
+                arguments = list(sigcol="Cl.gt.SMA",
+                                 sigval=TRUE, orderqty='all', 
+                                 ordertype='market', orderside='long', TxnFees= -100),
+                type='exit', path.dep = TRUE)
 
 # After adding rules, you can simply call applyStrategy and run your   
-# backtest. Here’s an explanation of how that’s done:
+# backtest. Here's an explanation of how that's done:
 
 # apply strategy
 start_t<-Sys.time()
-out<-applyStrategy(strategy=MAC , portfolios=portfolio.st)
+out<-applyStrategy(strategy= 'MAC', portfolios=portfolio.st)
 end_t<-Sys.time()
 print(end_t-start_t)
-
-# #set up analytics
 
 start_t<-Sys.time()
 updatePortf(Portfolio='MAC',Dates=paste('::',as.Date(Sys.time()),sep=''))
@@ -73,10 +93,6 @@ updateEndEq('MAC')
 end_t<-Sys.time()
 print("trade blotter portfolio update:")
 print(end_t-start_t)
-
-chart.Posn(Portfolio='MAC',Symbol=symbols)
-add_SMA(n=50 , on=1,col='blue')
-add_SMA(n=100, on=1)
 
 stats   = tradeStats('MAC')
 View(stats)
@@ -90,12 +106,13 @@ firstNonZeroDay = as.character(index(portfRets)[min(which(portfRets != 0))])
 
 # Comparison with SPY 
 
-getSymbols("SPY", from = firstNonZeroDay, to = to)
+# getSymbols("SPY", from = firstNonZeroDay, to = to)
 SPYrets = diff(log(Cl(SPY)))[-1]
 cumSPYrets = cumprod(1 + SPYrets)
 comparison = cbind(cumPortfRets, cumSPYrets)
 colnames(comparison) = c("strategy", "SPY")
 chart.TimeSeries(comparison, legend.loc = "topleft", colors = c("green", "red"))
+
 
 # Calculate risk metrics
 
