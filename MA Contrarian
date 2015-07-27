@@ -1,0 +1,162 @@
+
+# Load required libraries
+require(PerformanceAnalytics)
+require(quantstrat)
+require(quantmod)
+require(blotter)
+require(utils)
+
+# The first line is simply to remove the initial warning that comes from 
+# getting symbols from yahoo. It makes no difference to how the demo runs.
+# The next line clears the blotter environment. The blotter environment contains all # portfolio and account objects.
+options("getSymbols.warning4.0"=FALSE)
+rm(list=ls(.blotter), envir=.blotter)
+
+# Currency must be initialized for every demo.
+
+currency('USD')
+Sys.setenv(TZ="UTC")
+
+suppressWarnings(rm("order_book.MAC",pos=.strategy))
+suppressWarnings(rm("account.MAC","portfolio.MAC",pos=.blotter))
+suppressWarnings(rm("account.st","portfolio.st","symbols","MAC",'start_t','end_t'))
+
+initDate="2010-03-25"
+from="2010-03-26"
+to="2015-03-25"
+w = 1.2
+
+symbols <- c("SPY", "WFC", "JPM")
+getSymbols(symbols, from=from, to=to, src="yahoo", adjust=TRUE)
+
+SPY$Multiple = w * (SMA(SPY$SPY.Close,n=10))
+SPY$Divide = (1/w) * (SMA(SPY$SPY.Close,n=10))
+
+JPM$Multiple = w * (SMA(JPM$JPM.Close,n=10))
+JPM$Divide = (1/w) * (SMA(JPM$JPM.Close,n=10))
+
+WFC$Multiple = w * (SMA(WFC$WFC.Close,n=10))
+WFC$Divide = (1/w) * (SMA(WFC$WFC.Close,n=10))
+
+SPY = SPY[-(1:10),]
+JPM = JPM[-(1:10),]
+WFC = WFC[-(1:10),]
+
+stock(symbols, currency="USD", multiplier=1)
+
+initEq= 100000
+
+strategy.st = portfolio.st= account.st='MAC'
+rm.strat(strategy.st)
+initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD',initEq=initEq)
+initOrders(portfolio.st, initDate=initDate)
+strategy(strategy.st, store=TRUE)
+
+# Add an indicator
+add.indicator('faber', name = "RSI", 
+              arguments = list(x = quote(Cl(mktdata)), n=10), label="RSI10")
+
+MAC <- add.signal(strategy = MAC,name="sigCrossover",
+                  arguments = list(columns=c("Close","Divide"), relationship="lt"),label="Cl.lt.SMA")
+
+MAC <- add.signal(strategy = MAC,name="sigCrossover",
+                  arguments = list(column=c("Close","Multiple"),relationship="gt"),label="Cl.gt.SMA")
+
+
+MAC <- add.rule(strategy = MAC,name='ruleSignal', 
+                arguments = list(sigcol="Cl.lt.SMA",sigval=TRUE, 
+                                 ordertype='market', orderqty=100, 
+                                 orderside='long', TxnFees= -100),
+                type='enter', path.dep = TRUE)
+
+MAC <- add.rule(strategy = MAC,name='ruleSignal', 
+                arguments = list(sigcol="Cl.gt.SMA",
+                                 sigval=TRUE, orderqty='all', 
+                                 ordertype='market', orderside='long', TxnFees= -100),
+                type='exit', path.dep = TRUE)
+
+# After adding rules, you can simply call applyStrategy and run your   
+# backtest. Here's an explanation of how that's done:
+
+# apply strategy
+start_t<-Sys.time()
+out<-applyStrategy(strategy= 'MAC', portfolios=portfolio.st)
+end_t<-Sys.time()
+print(end_t-start_t)
+
+# set up analytics
+
+start_t<-Sys.time()
+updatePortf(Portfolio='MAC',Dates=paste('::',as.Date(Sys.time()),sep=''))
+updateAcct('MAC')
+updateEndEq('MAC')
+end_t<-Sys.time()
+print("trade blotter portfolio update:")
+print(end_t-start_t)
+
+
+stats = tradeStats('MAC')
+View(stats)
+ptstats = perTradeStats('MAC')
+instRets = PortfReturns('MAC')
+
+portfRets = xts(rowMeans(instRets) * ncol(instRets), order.by = index(instRets))
+portfRets = portfRets [!is.na(portfRets)]
+cumPortfRets = cumprod(1 + portfRets)
+firstNonZeroDay = as.character(index(portfRets)[min(which(portfRets != 0))])
+
+# Comparison with SPY 
+
+par(mfrow = c(1, 1))
+
+getSymbols("SPY", from = from, to = to)
+SPYrets = diff(log(Cl(SPY)))[-1]
+cumSPYrets = cumprod(1 + SPYrets)
+comparison = cbind(cumPortfRets, cumSPYrets)
+colnames(comparison) = c("strategy - MAC", "SPY")
+chart.TimeSeries(comparison, legend.loc = "topleft", colors = c("green", "red"))
+
+# Calculate risk metrics
+
+SharpeRatio = SharpeRatio.annualized(portfRets, Rf = 0.000119048)
+SharpeRatio
+# Annualized Sharpe Ratio (Rf=3%) 0.205259
+
+AnnualReturn = Return.annualized(R = portfRets)
+AnnualReturn
+# Annualized Return 0.04742953
+
+Max_Drawdown = maxDrawdown(portfRets)
+Max_Drawdown
+# 0.1049142
+
+chart.CumReturns(portfRets, main = "Strategy - MAC")
+
+# Sortino Ratio
+SortinoRatio = SortinoRatio(R = portfRets, MAR = 0.03, weights = NULL)
+SortinoRatio
+# Sortino Ratio (MAR = 3%) -0.9859208
+
+# calculate a Calmar or Sterling reward/risk ratio
+CalmarRatio = CalmarRatio(R = portfRets, scale = NA)
+CalmarRatio
+# Calmar Ratio 0.4520791
+
+
+# calculate Treynor Ratio or modified Treynor Ratio of excess return over CAPM beta
+
+TreynorRatio = TreynorRatio(portfRets, SPYrets, Rf = 0.03, scale = NA, modified = FALSE)
+TreynorRatio 
+#  -3.209815
+
+summary = matrix(c(SharpeRatio, AnnualReturn, Max_Drawdown,
+                   SortinoRatio, CalmarRatio, TreynorRatio),nrow=6,byrow=TRUE)
+colnames(summary) = c("MAC")
+rownames(summary) = c("SharpeRatio", "AnnualReturn", "Max_Drawdown",
+                      "SortinoRatio", "CalmarRatio", "TreynorRatio")
+summary = as.table(summary)
+summary
+chart.TimeSeries(comparison, legend.loc = "topleft", colors = c("green", "red"))
+chart.CumReturns(portfRets, main = "Strategy - MAC", col = "blue")
+
